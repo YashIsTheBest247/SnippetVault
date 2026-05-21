@@ -24,7 +24,7 @@ You need **Python 3.10+** and **Node 18+** installed. Two terminals.
 ```powershell
 cd backend
 python -m venv .venv
-.venv\Scripts\Activate.ps1  
+.venv\Scripts\Activate.ps1        # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 python -m uvicorn main:app --port 8000
 ```
@@ -77,8 +77,8 @@ live in `backend/snippets.db`, which is created automatically on first run.
 ---
 
 ## API reference
-
-| Method   | Path                       Purpose                                  |
+```bash
+| Method   | Path                       | Purpose                                  |
 | -------- | -------------------------- | ---------------------------------------- |
 | `GET`    | `/api/snippets?q=&tag=`    | List snippets (optional search + tag)    |
 | `POST`   | `/api/snippets`            | Create a snippet                         |
@@ -88,7 +88,7 @@ live in `backend/snippets.db`, which is created automatically on first run.
 | `DELETE` | `/api/snippets/{id}`       | Delete                                   |
 | `GET`    | `/api/tags`                | Distinct tags (for the filter chips)     |
 | `GET`    | `/api/health`              | Health check                             |
-
+```
 Interactive docs (Swagger UI) are at **http://localhost:8000/docs** while the backend is running.
 
 ---
@@ -103,7 +103,6 @@ backend/
 frontend/
   src/App.jsx        the whole UI (list, search, modal, cards)
   src/api.js         fetch wrapper
-  src/styles.css     dark theme
   vite.config.js     dev server + /api proxy
 run.ps1              one-command launcher (Windows)
 ANSWERS.md           assessment questions
