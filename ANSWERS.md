@@ -94,11 +94,16 @@ ANSWERS.md.
 
 ## 5. Honest gap
 
-**The auth has no brute-force protection or token revocation, and search doesn't
-scale.** Two concrete weaknesses: `/api/auth/login` has no rate limiting, and JWTs are stateless and valid until they expire (one week). Separately, list/search is a linear `LIKE` scan with no pagination.
+**The token handling isn't production-grade.** The JWT is stored in
+`localStorage`, so any cross-site-scripting flaw could read it, and because the
+token is a stateless JWT valid for a week, there's no way to revoke it if it
+leaks — logging out only forgets it client-side. `/api/auth/login` also has no
+rate limiting, so nothing slows down a password-guessing attack.
 
-**With another day** I'd add login rate limiting plus short-lived access tokens
-with a refresh token and a server-side denylist so revocation actually works,
-and replace the `LIKE` scan with a SQLite **FTS5** virtual table plus
-cursor-based pagination so search stays fast and ranks by relevance. I'd also add
-automated tests and syntax highlighting in the code preview.
+**With another day** I'd move the token to an `httpOnly`, `SameSite=Strict`
+cookie (out of reach of JavaScript), switch to a short-lived access token plus a
+refresh token backed by a server-side denylist so revocation actually works, and
+add per-IP and per-account rate limiting on login. I'd also replace the `LIKE`
+search with a SQLite **FTS5** index plus pagination so it stays fast as the vault
+grows, and add a **profiles section** where each user can manage their account —
+display name, avatar, change password — and see stats on their own snippets.

@@ -1,5 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import hljs from "highlight.js/lib/core";
+import javascript from "highlight.js/lib/languages/javascript";
+import typescript from "highlight.js/lib/languages/typescript";
+import python from "highlight.js/lib/languages/python";
+import go from "highlight.js/lib/languages/go";
+import rust from "highlight.js/lib/languages/rust";
+import java from "highlight.js/lib/languages/java";
+import sql from "highlight.js/lib/languages/sql";
+import bash from "highlight.js/lib/languages/bash";
+import xml from "highlight.js/lib/languages/xml";
+import css from "highlight.js/lib/languages/css";
+import json from "highlight.js/lib/languages/json";
 import { api, token, AuthError } from "./api.js";
+
+hljs.registerLanguage("javascript", javascript);
+hljs.registerLanguage("typescript", typescript);
+hljs.registerLanguage("python", python);
+hljs.registerLanguage("go", go);
+hljs.registerLanguage("rust", rust);
+hljs.registerLanguage("java", java);
+hljs.registerLanguage("sql", sql);
+hljs.registerLanguage("bash", bash);
+hljs.registerLanguage("html", xml);
+hljs.registerLanguage("css", css);
+hljs.registerLanguage("json", json);
 
 const EMPTY_FORM = { title: "", language: "javascript", code: "", tags: "" };
 
@@ -381,6 +405,13 @@ function SnippetCard({ s, index = 0, onEdit, onDelete, onPin }) {
   const [copied, setCopied] = useState(false);
   const enterDelay = `${Math.min(index, 12) * 45}ms`;
 
+  const highlighted = useMemo(() => {
+    if (s.code && hljs.getLanguage(s.language)) {
+      return hljs.highlight(s.code, { language: s.language }).value;
+    }
+    return null;
+  }, [s.code, s.language]);
+
   async function copy() {
     try {
       await navigator.clipboard.writeText(s.code);
@@ -410,7 +441,13 @@ function SnippetCard({ s, index = 0, onEdit, onDelete, onPin }) {
       <div className="lang">{s.language}</div>
 
       <pre className="code">
-        <code>{s.code || "// (empty)"}</code>
+        {!s.code ? (
+          <code className="hljs empty-code">// (empty)</code>
+        ) : highlighted !== null ? (
+          <code className="hljs" dangerouslySetInnerHTML={{ __html: highlighted }} />
+        ) : (
+          <code className="hljs">{s.code}</code>
+        )}
       </pre>
 
       {s.tags.length > 0 && (

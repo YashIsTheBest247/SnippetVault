@@ -9,6 +9,7 @@ Beyond plain CRUD it has the things you'd actually want from a snippet tool:
 - **Tag filtering** with click-to-toggle chips
 - **Pinning** so your most-used snippets float to the top
 - **One-click copy** of any snippet's code
+- **Syntax highlighting** in the code preview (highlight.js, per snippet language)
 - **Accounts** — register / log in with JWT auth; each user only sees their own snippets
 
 **Stack:** React (Vite) frontend · FastAPI backend · SQLite storage · JWT auth.
