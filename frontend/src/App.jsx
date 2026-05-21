@@ -1,7 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "./api.js";
+import { api, token, AuthError } from "./api.js";
 
 const EMPTY_FORM = { title: "", language: "javascript", code: "", tags: "" };
+
+function readUserFromToken() {
+  const t = token.get();
+  if (!t) return null;
+  try {
+    const payload = JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      token.clear();
+      return null;
+    }
+    return payload.username || "user";
+  } catch {
+    return null;
+  }
+}
 
 const LANGS = [
   "javascript", "typescript", "python", "go", "rust", "java",
@@ -10,11 +25,12 @@ const LANGS = [
 
 const SOCIALS = {
   github: "https://github.com/YashIsTheBest247",
-  linkedin: "https://www.linkedin.com/in/your-handle",
-  portfolio: "https://your-portfolio.com",
+  linkedin: "https://www.linkedin.com/in/yash-munshi-a0408b337/",
+  portfolio: "https://yash-munshi.vercel.app/",
 };
 
 export default function App() {
+  const [user, setUser] = useState(() => readUserFromToken());
   const [snippets, setSnippets] = useState([]);
   const [allTags, setAllTags] = useState([]);
   const [query, setQuery] = useState("");
@@ -34,6 +50,10 @@ export default function App() {
       setSnippets(items);
       setAllTags(tags);
     } catch (e) {
+      if (e instanceof AuthError) {
+        setUser(null);
+        return;
+      }
       setError(e.message || "Failed to reach the API. Is the backend running on :8000?");
     } finally {
       setLoading(false);
@@ -41,8 +61,26 @@ export default function App() {
   }
 
   useEffect(() => {
-    load("", "");
-  }, []);
+    if (user) {
+      setLoading(true);
+      load("", "");
+    }
+  }, [user]);
+
+  function handleAuthed(username) {
+    setQuery("");
+    setActiveTag("");
+    setUser(username);
+  }
+
+  function logout() {
+    token.clear();
+    setSnippets([]);
+    setAllTags([]);
+    setUser(null);
+  }
+
+  if (!user) return <AuthScreen onAuthed={handleAuthed} />;
 
   function onSearchChange(value) {
     setQuery(value);
@@ -95,7 +133,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <NavBar onNew={openNew} />
+      <NavBar onNew={openNew} user={user} onLogout={logout} />
 
       <header className="hero">
         <h1>
@@ -239,7 +277,7 @@ function SocialLink({ href, label, icon }) {
   );
 }
 
-function NavBar({ onNew }) {
+function NavBar({ onNew, user, onLogout }) {
   return (
     <nav className="nav">
       <Logo />
@@ -247,8 +285,95 @@ function NavBar({ onNew }) {
         <button className="pill pill-primary" onClick={onNew}>
           + NEW SNIPPET <span className="arrow">↗</span>
         </button>
+        <span className="user-chip" title={`Signed in as ${user}`}>
+          <span className="avatar">{user.slice(0, 1).toUpperCase()}</span>
+          {user}
+        </span>
+        <button className="pill pill-ghost" onClick={onLogout}>Log out</button>
       </div>
     </nav>
+  );
+}
+
+function AuthScreen({ onAuthed }) {
+  const [mode, setMode] = useState("login");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const isRegister = mode === "register";
+
+  async function submit(e) {
+    e.preventDefault();
+    setErr("");
+    if (username.trim().length < 3) return setErr("Username must be at least 3 characters.");
+    if (password.length < 6) return setErr("Password must be at least 6 characters.");
+    setBusy(true);
+    try {
+      const fn = isRegister ? api.register : api.login;
+      const res = await fn(username.trim(), password);
+      token.set(res.access_token);
+      onAuthed(res.username);
+    } catch (e2) {
+      setErr(e2.message || "Something went wrong.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="auth-wrap">
+      <div className="auth-card">
+        <div className="auth-brand">
+          <Logo size="lg" />
+        </div>
+        <h1 className="auth-title">{isRegister ? "Create your vault" : "Welcome back"}</h1>
+        <p className="auth-sub">
+          {isRegister
+            ? "Your snippets stay private to your account."
+            : "Sign in to your private snippet vault."}
+        </p>
+
+        <form onSubmit={submit}>
+          <label>Username</label>
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoFocus
+            autoComplete="username"
+            placeholder="yourname"
+          />
+          <label>Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete={isRegister ? "new-password" : "current-password"}
+            placeholder="••••••••"
+          />
+
+          {err && <div className="banner error">{err}</div>}
+
+          <button type="submit" className="pill pill-primary auth-submit" disabled={busy}>
+            {busy ? "Please wait…" : isRegister ? "Create account" : "Sign in"}
+            <span className="arrow">↗</span>
+          </button>
+        </form>
+
+        <p className="auth-switch">
+          {isRegister ? "Already have an account?" : "New here?"}{" "}
+          <button
+            className="link"
+            onClick={() => {
+              setMode(isRegister ? "login" : "register");
+              setErr("");
+            }}
+          >
+            {isRegister ? "Sign in" : "Create one"}
+          </button>
+        </p>
+      </div>
+    </div>
   );
 }
 

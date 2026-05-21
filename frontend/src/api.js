@@ -1,10 +1,25 @@
 const BASE = "/api";
+const TOKEN_KEY = "snippet_vault_token";
+
+export const token = {
+  get: () => localStorage.getItem(TOKEN_KEY),
+  set: (t) => localStorage.setItem(TOKEN_KEY, t),
+  clear: () => localStorage.removeItem(TOKEN_KEY),
+};
+
+export class AuthError extends Error {}
 
 async function request(path, options = {}) {
-  const res = await fetch(BASE + path, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  const t = token.get();
+  if (t) headers.Authorization = `Bearer ${t}`;
+
+  const res = await fetch(BASE + path, { ...options, headers });
+
+  if (res.status === 401) {
+    token.clear();
+    throw new AuthError("Your session expired. Please sign in again.");
+  }
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -19,6 +34,11 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  register: (username, password) =>
+    request("/auth/register", { method: "POST", body: JSON.stringify({ username, password }) }),
+  login: (username, password) =>
+    request("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+
   list: (q = "", tag = "") => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);

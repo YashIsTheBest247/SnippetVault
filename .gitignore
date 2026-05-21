@@ -2,8 +2,6 @@
 backend/.venv/
 __pycache__/
 *.pyc
-
-# SQLite database (created at runtime — data is local, not committed)
 backend/snippets.db
 backend/snippets.db-journal
 backend/snippets.db-wal
