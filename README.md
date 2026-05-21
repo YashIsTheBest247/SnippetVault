@@ -9,9 +9,9 @@ Beyond plain CRUD it has the things you'd actually want from a snippet tool:
 - **Tag filtering** with click-to-toggle chips
 - **Pinning** so your most-used snippets float to the top
 - **One-click copy** of any snippet's code
-- **Authentication** 
+- **Accounts** — register / log in with JWT auth; each user only sees their own snippets
 
-**Stack:** React (Vite) frontend · FastAPI backend · SQLite storage.
+**Stack:** React (Vite) frontend · FastAPI backend · SQLite storage · JWT auth.
 
 ---
 
@@ -55,15 +55,19 @@ both servers:
 
 ## How to use
 
-1. **Add a snippet.** Click **+ NEW SNIPPET** (top right). Give it a title, pick
+1. **Create an account.** On first load you'll see a sign-in screen — click
+   **"Create one"**, pick a username (3+ characters) and password (6+
+   characters), and submit. You're logged straight in, and a refresh keeps you
+   signed in. Log back in anytime with the same credentials.
+2. **Add a snippet.** Click **+ NEW SNIPPET** (top right). Give it a title, pick
    a language, paste your code, and add comma-separated tags (e.g.
    `react, hooks`). Click **Create snippet**.
-2. **Find things fast.** Type in the search box to match across titles, code, and
+3. **Find things fast.** Type in the search box to match across titles, code, and
    tags as you type. Click a **#tag chip** to filter to just that tag; click it
    again to clear.
-3. **Pin the important ones.** Click the **☆** on a card to pin it — pinned
+4. **Pin the important ones.** Click the **☆** on a card to pin it — pinned
    snippets always sort to the top.
-4. **Copy / edit / delete.** Each card has a **Copy** button (copies the code to
+5. **Copy / edit / delete.** Each card has a **Copy** button (copies the code to
    your clipboard), plus **Edit** and **Delete**.
 
 ---
@@ -71,25 +75,32 @@ both servers:
 ## Verifying persistence
 
 Create a few snippets, then stop the backend (Ctrl+C) and start it again with
-`python -m uvicorn main:app --port 8000`. Your snippets are still there — they
-live in `backend/snippets.db`, which is created automatically on first run.
+`python -m uvicorn main:app --port 8000`. Log back in — your snippets are still
+there. Both accounts and snippets live in `backend/snippets.db`, which is
+created automatically on first run.
 
 ---
 
 ## API reference
-```bash
-| Method   | Path                       | Purpose                                  |
-| -------- | -------------------------- | ---------------------------------------- |
-| `GET`    | `/api/snippets?q=&tag=`    | List snippets (optional search + tag)    |
-| `POST`   | `/api/snippets`            | Create a snippet                         |
-| `GET`    | `/api/snippets/{id}`       | Fetch one                                |
-| `PUT`    | `/api/snippets/{id}`       | Update                                   |
-| `PATCH`  | `/api/snippets/{id}/pin`   | Toggle pinned                            |
-| `DELETE` | `/api/snippets/{id}`       | Delete                                   |
-| `GET`    | `/api/tags`                | Distinct tags (for the filter chips)     |
-| `GET`    | `/api/health`              | Health check                             |
-```
-Interactive docs (Swagger UI) are at **http://localhost:8000/docs** while the backend is running.
+
+All `/api/snippets` and `/api/tags` routes require an
+`Authorization: Bearer <token>` header. Get a token from register or login.
+
+| Method   | Path                       | Purpose                                |
+| -------- | -------------------------- | -------------------------------------- |
+| `POST`   | `/api/auth/register`       | Create an account, returns a JWT       |
+| `POST`   | `/api/auth/login`          | Log in, returns a JWT                  |
+| `GET`    | `/api/auth/me`             | Current user from the token            |
+| `GET`    | `/api/snippets?q=&tag=`    | List your snippets (search + tag)      |
+| `POST`   | `/api/snippets`            | Create a snippet                       |
+| `GET`    | `/api/snippets/{id}`       | Fetch one of yours                     |
+| `PUT`    | `/api/snippets/{id}`       | Update                                 |
+| `PATCH`  | `/api/snippets/{id}/pin`   | Toggle pinned                          |
+| `DELETE` | `/api/snippets/{id}`       | Delete                                 |
+| `GET`    | `/api/tags`                | Distinct tags (for the filter chips)   |
+| `GET`    | `/api/health`              | Health check                           |
+
+Interactive docs (Swagger UI) are at **http://localhost:8000/docs** while the backend is running — use the **Authorize** button to paste a token.
 
 ---
 
@@ -97,12 +108,16 @@ Interactive docs (Swagger UI) are at **http://localhost:8000/docs** while the ba
 
 ```
 backend/
-  main.py            FastAPI app + routes
-  db.py              SQLite connection, schema, tag normalization
-  requirements.txt   runtime deps (fastapi, uvicorn)
+  main.py            FastAPI app: auth + snippet routes
+  auth.py            JWT issue/verify + current-user dependency
+  db.py              SQLite connection, schema, password hashing, tag normalization
+  requirements.txt   runtime deps (fastapi, uvicorn, PyJWT)
 frontend/
-  src/App.jsx        the whole UI (list, search, modal, cards)
-  src/api.js         fetch wrapper
+  index.html         app shell + favicon link
+  src/App.jsx        the whole UI (auth screen, list, search, modal, cards)
+  src/api.js         fetch wrapper + token storage
+  src/styles.css     dark theme
+  public/favicon.svg logo favicon
   vite.config.js     dev server + /api proxy
 run.ps1              one-command launcher (Windows)
 ANSWERS.md           assessment questions
