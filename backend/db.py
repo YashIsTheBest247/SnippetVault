@@ -6,7 +6,10 @@ app has zero compiled dependencies and runs on a fresh machine after a single
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
+import secrets
 import sqlite3
 from datetime import datetime, timezone
 
@@ -18,8 +21,16 @@ from datetime import datetime, timezone
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snippets.db")
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+    password_hash TEXT    NOT NULL,
+    created_at    TEXT    NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS snippets (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title       TEXT    NOT NULL,
     language    TEXT    NOT NULL DEFAULT 'plaintext',
     code        TEXT    NOT NULL DEFAULT '',
@@ -47,6 +58,41 @@ def get_conn() -> sqlite3.Connection:
 def init_db() -> None:
     with get_conn() as conn:
         conn.executescript(SCHEMA)
+        # Migration: a database created before auth existed has a snippets
+        # table without a user_id column. Add it (nullable) so the app still
+        # starts; those legacy rows simply belong to no user. This must run
+        # BEFORE the index below, which references user_id.
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(snippets)")}
+        if "user_id" not in cols:
+            conn.execute("ALTER TABLE snippets ADD COLUMN user_id INTEGER")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_snippets_user ON snippets(user_id)")
+
+
+# ---------------------------------------------------------------------------
+# Password hashing — stdlib PBKDF2-HMAC-SHA256, no external crypto deps.
+# Stored format: "pbkdf2_sha256$<iterations>$<salt_hex>$<hash_hex>"
+# ---------------------------------------------------------------------------
+_PBKDF2_ITERATIONS = 240_000
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, _PBKDF2_ITERATIONS)
+    return f"pbkdf2_sha256${_PBKDF2_ITERATIONS}${salt.hex()}${dk.hex()}"
+
+
+def verify_password(password: str, stored: str) -> bool:
+    try:
+        algo, iters, salt_hex, hash_hex = stored.split("$")
+        if algo != "pbkdf2_sha256":
+            return False
+        dk = hashlib.pbkdf2_hmac(
+            "sha256", password.encode(), bytes.fromhex(salt_hex), int(iters)
+        )
+        # Constant-time comparison to avoid timing side-channels.
+        return hmac.compare_digest(dk.hex(), hash_hex)
+    except (ValueError, AttributeError):
+        return False
 
 
 def normalize_tags(raw) -> str:

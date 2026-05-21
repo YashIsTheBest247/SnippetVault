@@ -1,6 +1,7 @@
 """FastAPI backend for the Snippets mini-app.
 
-CRUD over code snippets with three "beyond CRUD" features:
+Per-user code snippets, protected by JWT auth. Each user only ever sees and
+edits their own snippets. Beyond CRUD there are three "real" features:
   * full-text search across title + code + tags (?q=)
   * tag filtering (?tag=)
   * pinning, so important snippets float to the top
@@ -11,16 +12,36 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
+import auth
 import db
 
 
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
+class Credentials(BaseModel):
+    username: str = Field(min_length=3, max_length=40)
+    password: str = Field(min_length=6, max_length=200)
+
+    @field_validator("username")
+    @classmethod
+    def username_clean(cls, v: str) -> str:
+        v = v.strip()
+        if not v.isascii() or " " in v:
+            raise ValueError("username must be a single ASCII word")
+        return v
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    username: str
+
+
 class SnippetIn(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     language: str = Field(default="plaintext", max_length=40)
@@ -68,7 +89,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Snippets API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Snippet Vault API", version="2.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -83,30 +104,71 @@ def health():
     return {"status": "ok"}
 
 
+# ---------------------------------------------------------------------------
+# Auth routes
+# ---------------------------------------------------------------------------
+@app.post("/api/auth/register", response_model=TokenOut, status_code=201)
+def register(creds: Credentials):
+    with db.get_conn() as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM users WHERE username = ?", (creds.username,)
+        ).fetchone()
+        if exists:
+            raise HTTPException(status_code=409, detail="Username already taken")
+        cur = conn.execute(
+            "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
+            (creds.username, db.hash_password(creds.password), db.now_iso()),
+        )
+        user_id = cur.lastrowid
+    token = auth.create_token(user_id, creds.username)
+    return TokenOut(access_token=token, username=creds.username)
+
+
+@app.post("/api/auth/login", response_model=TokenOut)
+def login(creds: Credentials):
+    with db.get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, username, password_hash FROM users WHERE username = ?",
+            (creds.username,),
+        ).fetchone()
+    # Same error whether the user is unknown or the password is wrong, so an
+    # attacker can't enumerate which usernames exist.
+    if row is None or not db.verify_password(creds.password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    token = auth.create_token(row["id"], row["username"])
+    return TokenOut(access_token=token, username=row["username"])
+
+
+@app.get("/api/auth/me")
+def me(user: dict = Depends(auth.get_current_user)):
+    return user
+
+
+# ---------------------------------------------------------------------------
+# Snippet routes — all scoped to the authenticated user
+# ---------------------------------------------------------------------------
 @app.get("/api/snippets", response_model=list[Snippet])
 def list_snippets(
     q: str | None = Query(default=None, description="full-text search"),
     tag: str | None = Query(default=None, description="filter by exact tag"),
+    user: dict = Depends(auth.get_current_user),
 ):
-    sql = "SELECT * FROM snippets"
-    clauses: list[str] = []
-    params: list = []
+    sql = "SELECT * FROM snippets WHERE user_id = ?"
+    params: list = [user["id"]]
 
     if q:
         # Parameterized LIKE — user input never concatenated into SQL, so a
         # query containing %, _, quotes or ';' is matched literally/safely.
         like = f"%{q.strip()}%"
-        clauses.append("(title LIKE ? OR code LIKE ? OR tags LIKE ?)")
+        sql += " AND (title LIKE ? OR code LIKE ? OR tags LIKE ?)"
         params += [like, like, like]
 
     if tag:
         # Exact tag match against the comma-joined column. Wrapping both sides
         # in commas makes "py" not match a tag like "python".
-        clauses.append("(',' || tags || ',') LIKE ?")
+        sql += " AND (',' || tags || ',') LIKE ?"
         params.append(f"%,{tag.strip().lower()},%")
 
-    if clauses:
-        sql += " WHERE " + " AND ".join(clauses)
     sql += " ORDER BY pinned DESC, updated_at DESC"
 
     with db.get_conn() as conn:
@@ -115,33 +177,44 @@ def list_snippets(
 
 
 @app.get("/api/tags", response_model=list[str])
-def list_tags():
-    """Distinct tags across all snippets, for the filter UI."""
+def list_tags(user: dict = Depends(auth.get_current_user)):
+    """Distinct tags across the user's snippets, for the filter UI."""
     with db.get_conn() as conn:
-        rows = conn.execute("SELECT tags FROM snippets WHERE tags != ''").fetchall()
+        rows = conn.execute(
+            "SELECT tags FROM snippets WHERE user_id = ? AND tags != ''", (user["id"],)
+        ).fetchall()
     seen: set[str] = set()
     for r in rows:
         seen.update(db.tags_to_list(r["tags"]))
     return sorted(seen)
 
 
-@app.get("/api/snippets/{snippet_id}", response_model=Snippet)
-def get_snippet(snippet_id: int):
-    with db.get_conn() as conn:
-        row = conn.execute("SELECT * FROM snippets WHERE id = ?", (snippet_id,)).fetchone()
+def _owned_row(conn, snippet_id: int, user_id: int):
+    """Fetch a snippet only if it belongs to this user, else 404."""
+    row = conn.execute(
+        "SELECT * FROM snippets WHERE id = ? AND user_id = ?", (snippet_id, user_id)
+    ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="snippet not found")
+    return row
+
+
+@app.get("/api/snippets/{snippet_id}", response_model=Snippet)
+def get_snippet(snippet_id: int, user: dict = Depends(auth.get_current_user)):
+    with db.get_conn() as conn:
+        row = _owned_row(conn, snippet_id, user["id"])
     return row_to_snippet(row)
 
 
 @app.post("/api/snippets", response_model=Snippet, status_code=201)
-def create_snippet(payload: SnippetIn):
+def create_snippet(payload: SnippetIn, user: dict = Depends(auth.get_current_user)):
     ts = db.now_iso()
     with db.get_conn() as conn:
         cur = conn.execute(
-            """INSERT INTO snippets (title, language, code, tags, pinned, created_at, updated_at)
-               VALUES (?, ?, ?, ?, 0, ?, ?)""",
+            """INSERT INTO snippets (user_id, title, language, code, tags, pinned, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, 0, ?, ?)""",
             (
+                user["id"],
                 payload.title,
                 payload.language,
                 payload.code,
@@ -150,17 +223,16 @@ def create_snippet(payload: SnippetIn):
                 ts,
             ),
         )
-        new_id = cur.lastrowid
-        row = conn.execute("SELECT * FROM snippets WHERE id = ?", (new_id,)).fetchone()
+        row = conn.execute("SELECT * FROM snippets WHERE id = ?", (cur.lastrowid,)).fetchone()
     return row_to_snippet(row)
 
 
 @app.put("/api/snippets/{snippet_id}", response_model=Snippet)
-def update_snippet(snippet_id: int, payload: SnippetIn):
+def update_snippet(
+    snippet_id: int, payload: SnippetIn, user: dict = Depends(auth.get_current_user)
+):
     with db.get_conn() as conn:
-        existing = conn.execute("SELECT id FROM snippets WHERE id = ?", (snippet_id,)).fetchone()
-        if existing is None:
-            raise HTTPException(status_code=404, detail="snippet not found")
+        _owned_row(conn, snippet_id, user["id"])
         conn.execute(
             """UPDATE snippets
                SET title = ?, language = ?, code = ?, tags = ?, updated_at = ?
@@ -179,11 +251,9 @@ def update_snippet(snippet_id: int, payload: SnippetIn):
 
 
 @app.patch("/api/snippets/{snippet_id}/pin", response_model=Snippet)
-def toggle_pin(snippet_id: int):
+def toggle_pin(snippet_id: int, user: dict = Depends(auth.get_current_user)):
     with db.get_conn() as conn:
-        row = conn.execute("SELECT pinned FROM snippets WHERE id = ?", (snippet_id,)).fetchone()
-        if row is None:
-            raise HTTPException(status_code=404, detail="snippet not found")
+        row = _owned_row(conn, snippet_id, user["id"])
         new_val = 0 if row["pinned"] else 1
         conn.execute(
             "UPDATE snippets SET pinned = ?, updated_at = ? WHERE id = ?",
@@ -194,10 +264,13 @@ def toggle_pin(snippet_id: int):
 
 
 @app.delete("/api/snippets/{snippet_id}", status_code=204)
-def delete_snippet(snippet_id: int):
+def delete_snippet(snippet_id: int, user: dict = Depends(auth.get_current_user)):
     with db.get_conn() as conn:
-        cur = conn.execute("DELETE FROM snippets WHERE id = ?", (snippet_id,))
+        cur = conn.execute(
+            "DELETE FROM snippets WHERE id = ? AND user_id = ?", (snippet_id, user["id"])
+        )
         if cur.rowcount == 0:
-            # Tell the caller the row never existed instead of silently 204-ing.
+            # Either it never existed or it belongs to someone else — same 404
+            # so users can't probe for other people's snippet IDs.
             raise HTTPException(status_code=404, detail="snippet not found")
     return None
