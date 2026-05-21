@@ -1,7 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "./api.js";
+import { api, token, AuthError } from "./api.js";
 
 const EMPTY_FORM = { title: "", language: "javascript", code: "", tags: "" };
+
+// Read the username out of a stored JWT without trusting it (the server is the
+// real authority). Lets us show the right screen instantly on reload, before
+// any network call. Returns null for a missing/expired/malformed token.
+function readUserFromToken() {
+  const t = token.get();
+  if (!t) return null;
+  try {
+    const payload = JSON.parse(
+      atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))
+    );
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      token.clear();
+      return null;
+    }
+    return payload.username || "user";
+  } catch {
+    return null;
+  }
+}
 
 const LANGS = [
   "javascript", "typescript", "python", "go", "rust", "java",
@@ -9,6 +29,7 @@ const LANGS = [
 ];
 
 export default function App() {
+  const [user, setUser] = useState(() => readUserFromToken());
   const [snippets, setSnippets] = useState([]);
   const [allTags, setAllTags] = useState([]);
   const [query, setQuery] = useState("");
@@ -29,16 +50,40 @@ export default function App() {
       setSnippets(items);
       setAllTags(tags);
     } catch (e) {
+      if (e instanceof AuthError) {
+        setUser(null); // token expired/invalid -> back to the sign-in screen
+        return;
+      }
       setError(e.message || "Failed to reach the API. Is the backend running on :8000?");
     } finally {
       setLoading(false);
     }
   }
 
+  // Load (or reload) snippets whenever we have an authenticated user.
   useEffect(() => {
-    load("", "");
+    if (user) {
+      setLoading(true);
+      load("", "");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user]);
+
+  function handleAuthed(username) {
+    setQuery("");
+    setActiveTag("");
+    setUser(username);
+  }
+
+  function logout() {
+    token.clear();
+    setSnippets([]);
+    setAllTags([]);
+    setUser(null);
+  }
+
+  // Not signed in -> show the auth screen, nothing else.
+  if (!user) return <AuthScreen onAuthed={handleAuthed} />;
 
   function onSearchChange(value) {
     setQuery(value);
@@ -91,7 +136,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <NavBar onNew={openNew} />
+      <NavBar onNew={openNew} user={user} onLogout={logout} />
 
       <header className="hero">
         <h1>
@@ -100,7 +145,7 @@ export default function App() {
         <p className="tagline">Your code, searchable and persistent.</p>
         <div className="hero-meta">
           <span className="meta-item">⌗ {count} snippet{count === 1 ? "" : "s"}</span>
-          <span className="meta-item ok"><span className="pulse" /> Saved locally, survives restarts</span>
+          <span className="meta-item ok"><span className="pulse" /> For a coder, by a coder</span>
         </div>
       </header>
 
@@ -156,7 +201,7 @@ export default function App() {
 
       <footer className="footer">
         <span>SNIPPET VAULT</span>
-        <span className="muted">Built with React + FastAPI · SQLite persistence</span>
+        <span className="muted">Made with 💙 by Yash Munshi</span>
       </footer>
 
       {modalOpen && (
@@ -173,16 +218,106 @@ export default function App() {
   );
 }
 
-function NavBar({ onNew }) {
+function AuthScreen({ onAuthed }) {
+  const [mode, setMode] = useState("login"); // "login" | "register"
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const isRegister = mode === "register";
+
+  async function submit(e) {
+    e.preventDefault();
+    setErr("");
+    if (username.trim().length < 3) return setErr("Username must be at least 3 characters.");
+    if (password.length < 6) return setErr("Password must be at least 6 characters.");
+    setBusy(true);
+    try {
+      const fn = isRegister ? api.register : api.login;
+      const res = await fn(username.trim(), password);
+      token.set(res.access_token);
+      onAuthed(res.username);
+    } catch (e2) {
+      setErr(e2.message || "Something went wrong.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="auth-wrap">
+      <div className="auth-card">
+        <div className="brand auth-brand">
+          <span className="monogram">SV</span>
+          <span className="brandname">SNIPPET VAULT<span className="dot">.</span></span>
+        </div>
+        <h1 className="auth-title">{isRegister ? "Create your vault" : "Welcome back"}</h1>
+        <p className="auth-sub">
+          {isRegister
+            ? "Your snippets stay private to your account."
+            : "Sign in to your private snippet vault."}
+        </p>
+
+        <form onSubmit={submit}>
+          <label>Username</label>
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoFocus
+            autoComplete="username"
+            placeholder="yourname"
+          />
+          <label>Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete={isRegister ? "new-password" : "current-password"}
+            placeholder="••••••••"
+          />
+
+          {err && <div className="banner error">{err}</div>}
+
+          <button type="submit" className="pill pill-primary auth-submit" disabled={busy}>
+            {busy ? "Please wait…" : isRegister ? "Create account" : "Sign in"}
+            <span className="arrow">↗</span>
+          </button>
+        </form>
+
+        <p className="auth-switch">
+          {isRegister ? "Already have an account?" : "New here?"}{" "}
+          <button
+            className="link"
+            onClick={() => {
+              setMode(isRegister ? "login" : "register");
+              setErr("");
+            }}
+          >
+            {isRegister ? "Sign in" : "Create one"}
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function NavBar({ onNew, user, onLogout }) {
   return (
     <nav className="nav">
       <div className="brand">
         <span className="monogram">SV</span>
         <span className="brandname">SNIPPET <span className="dot">.</span></span>
       </div>
-      <button className="pill pill-primary" onClick={onNew}>
-        + NEW SNIPPET <span className="arrow">↗</span>
-      </button>
+      <div className="nav-right">
+        <button className="pill pill-primary" onClick={onNew}>
+          + NEW SNIPPET <span className="arrow">↗</span>
+        </button>
+        <span className="user-chip" title={`Signed in as ${user}`}>
+          <span className="avatar">{user.slice(0, 1).toUpperCase()}</span>
+          {user}
+        </span>
+        <button className="pill pill-ghost" onClick={onLogout}>Log out</button>
+      </div>
     </nav>
   );
 }
