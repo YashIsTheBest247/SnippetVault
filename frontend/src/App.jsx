@@ -1,35 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, token, AuthError } from "./api.js";
+import { api } from "./api.js";
 
 const EMPTY_FORM = { title: "", language: "javascript", code: "", tags: "" };
-
-// Read the username out of a stored JWT without trusting it (the server is the
-// real authority). Lets us show the right screen instantly on reload, before
-// any network call. Returns null for a missing/expired/malformed token.
-function readUserFromToken() {
-  const t = token.get();
-  if (!t) return null;
-  try {
-    const payload = JSON.parse(
-      atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))
-    );
-    if (payload.exp && payload.exp * 1000 < Date.now()) {
-      token.clear();
-      return null;
-    }
-    return payload.username || "user";
-  } catch {
-    return null;
-  }
-}
 
 const LANGS = [
   "javascript", "typescript", "python", "go", "rust", "java",
   "sql", "bash", "html", "css", "json", "plaintext",
 ];
 
+const SOCIALS = {
+  github: "https://github.com/YashIsTheBest247",
+  linkedin: "https://www.linkedin.com/in/your-handle",
+  portfolio: "https://your-portfolio.com",
+};
+
 export default function App() {
-  const [user, setUser] = useState(() => readUserFromToken());
   const [snippets, setSnippets] = useState([]);
   const [allTags, setAllTags] = useState([]);
   const [query, setQuery] = useState("");
@@ -38,9 +23,8 @@ export default function App() {
   const [error, setError] = useState("");
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null); // snippet being edited, or null for "new"
+  const [editing, setEditing] = useState(null);
 
-  // Debounce the search box so we don't fire a request on every keystroke.
   const debounceRef = useRef(null);
 
   async function load(q = query, tag = activeTag) {
@@ -50,40 +34,15 @@ export default function App() {
       setSnippets(items);
       setAllTags(tags);
     } catch (e) {
-      if (e instanceof AuthError) {
-        setUser(null); // token expired/invalid -> back to the sign-in screen
-        return;
-      }
       setError(e.message || "Failed to reach the API. Is the backend running on :8000?");
     } finally {
       setLoading(false);
     }
   }
 
-  // Load (or reload) snippets whenever we have an authenticated user.
   useEffect(() => {
-    if (user) {
-      setLoading(true);
-      load("", "");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
-  function handleAuthed(username) {
-    setQuery("");
-    setActiveTag("");
-    setUser(username);
-  }
-
-  function logout() {
-    token.clear();
-    setSnippets([]);
-    setAllTags([]);
-    setUser(null);
-  }
-
-  // Not signed in -> show the auth screen, nothing else.
-  if (!user) return <AuthScreen onAuthed={handleAuthed} />;
+    load("", "");
+  }, []);
 
   function onSearchChange(value) {
     setQuery(value);
@@ -136,7 +95,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <NavBar onNew={openNew} user={user} onLogout={logout} />
+      <NavBar onNew={openNew} />
 
       <header className="hero">
         <h1>
@@ -201,8 +160,19 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        <span>SNIPPET VAULT</span>
-        <span className="muted">Made with 💙 by Yash Munshi</span>
+        <div className="footer-row">
+          <Logo />
+          <div className="socials">
+            <span className="socials-label">Follow the creator</span>
+            <SocialLink href={SOCIALS.github} label="GitHub" icon="github" />
+            <SocialLink href={SOCIALS.linkedin} label="LinkedIn" icon="linkedin" />
+            <SocialLink href={SOCIALS.portfolio} label="Portfolio" icon="portfolio" />
+          </div>
+        </div>
+        <div className="footer-row footer-bottom">
+          <span className="muted">© {new Date().getFullYear()} — All Rights Reserved. All Wrongs Reversed.</span>
+          <span className="muted">Made with 💙 by Yash Munshi</span>
+        </div>
       </footer>
 
       {modalOpen && (
@@ -228,7 +198,6 @@ function Logo({ size = "md" }) {
           x="2.6" y="2.6" width="34.8" height="34.8" rx="10.4"
           stroke="rgba(255,255,255,0.18)" strokeWidth="1.2"
         />
-        {/* code brackets — the "snippet" mark */}
         <path d="M16 13 L10 20 L16 27" stroke="#fff" strokeWidth="2.4"
           strokeLinecap="round" strokeLinejoin="round" />
         <path d="M24 13 L30 20 L24 27" stroke="#fff" strokeWidth="2.4"
@@ -249,89 +218,28 @@ function Logo({ size = "md" }) {
   );
 }
 
-function AuthScreen({ onAuthed }) {
-  const [mode, setMode] = useState("login"); // "login" | "register"
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
+const SOCIAL_ICONS = {
+  github: (
+    <path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.27 2.75 1.05A9.36 9.36 0 0 1 12 6.84c.85 0 1.71.12 2.51.34 1.91-1.32 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9 0 1.37-.01 2.48-.01 2.82 0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z" />
+  ),
+  linkedin: (
+    <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.22.79 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z" />
+  ),
+  portfolio: (
+    <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm6.93 6h-2.95a15.6 15.6 0 0 0-1.38-3.56A8.03 8.03 0 0 1 18.93 8zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14a7.96 7.96 0 0 1 0-4h3.38a16.5 16.5 0 0 0 0 4H4.26zm.81 2h2.95c.32 1.25.79 2.45 1.38 3.56A8.03 8.03 0 0 1 5.07 16zm2.95-8H5.07a8.03 8.03 0 0 1 4.33-3.56A15.6 15.6 0 0 0 8.02 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82A13.7 13.7 0 0 1 12 19.96zM14.34 14H9.66a14.7 14.7 0 0 1 0-4h4.68a14.7 14.7 0 0 1 0 4zm.26 5.56c.59-1.11 1.06-2.31 1.38-3.56h2.95a8.03 8.03 0 0 1-4.33 3.56zM16.36 14a16.5 16.5 0 0 0 0-4h3.38a7.96 7.96 0 0 1 0 4h-3.38z" />
+  ),
+};
 
-  const isRegister = mode === "register";
-
-  async function submit(e) {
-    e.preventDefault();
-    setErr("");
-    if (username.trim().length < 3) return setErr("Username must be at least 3 characters.");
-    if (password.length < 6) return setErr("Password must be at least 6 characters.");
-    setBusy(true);
-    try {
-      const fn = isRegister ? api.register : api.login;
-      const res = await fn(username.trim(), password);
-      token.set(res.access_token);
-      onAuthed(res.username);
-    } catch (e2) {
-      setErr(e2.message || "Something went wrong.");
-      setBusy(false);
-    }
-  }
-
+function SocialLink({ href, label, icon }) {
   return (
-    <div className="auth-wrap">
-      <div className="auth-card">
-        <div className="auth-brand">
-          <Logo size="lg" />
-        </div>
-        <h1 className="auth-title">{isRegister ? "Create your vault" : "Welcome back"}</h1>
-        <p className="auth-sub">
-          {isRegister
-            ? "Your snippets stay private to your account."
-            : "Sign in to your private snippet vault."}
-        </p>
-
-        <form onSubmit={submit}>
-          <label>Username</label>
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoFocus
-            autoComplete="username"
-            placeholder="yourname"
-          />
-          <label>Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete={isRegister ? "new-password" : "current-password"}
-            placeholder="••••••••"
-          />
-
-          {err && <div className="banner error">{err}</div>}
-
-          <button type="submit" className="pill pill-primary auth-submit" disabled={busy}>
-            {busy ? "Please wait…" : isRegister ? "Create account" : "Sign in"}
-            <span className="arrow">↗</span>
-          </button>
-        </form>
-
-        <p className="auth-switch">
-          {isRegister ? "Already have an account?" : "New here?"}{" "}
-          <button
-            className="link"
-            onClick={() => {
-              setMode(isRegister ? "login" : "register");
-              setErr("");
-            }}
-          >
-            {isRegister ? "Sign in" : "Create one"}
-          </button>
-        </p>
-      </div>
-    </div>
+    <a className="social" href={href} target="_blank" rel="noreferrer noopener" aria-label={label}>
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">{SOCIAL_ICONS[icon]}</svg>
+      <span>{label}</span>
+    </a>
   );
 }
 
-function NavBar({ onNew, user, onLogout }) {
+function NavBar({ onNew }) {
   return (
     <nav className="nav">
       <Logo />
@@ -339,11 +247,6 @@ function NavBar({ onNew, user, onLogout }) {
         <button className="pill pill-primary" onClick={onNew}>
           + NEW SNIPPET <span className="arrow">↗</span>
         </button>
-        <span className="user-chip" title={`Signed in as ${user}`}>
-          <span className="avatar">{user.slice(0, 1).toUpperCase()}</span>
-          {user}
-        </span>
-        <button className="pill pill-ghost" onClick={onLogout}>Log out</button>
       </div>
     </nav>
   );
@@ -351,7 +254,6 @@ function NavBar({ onNew, user, onLogout }) {
 
 function SnippetCard({ s, index = 0, onEdit, onDelete, onPin }) {
   const [copied, setCopied] = useState(false);
-  // Stagger the entrance, but cap the delay so a big list doesn't crawl in.
   const enterDelay = `${Math.min(index, 12) * 45}ms`;
 
   async function copy() {
@@ -360,7 +262,7 @@ function SnippetCard({ s, index = 0, onEdit, onDelete, onPin }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
     } catch {
-      /* clipboard blocked (e.g. insecure context) — ignore */
+      setCopied(false);
     }
   }
 

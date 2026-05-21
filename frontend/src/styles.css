@@ -26,7 +26,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* subtle grid backdrop, echoing the portfolio hero */
 .app {
   min-height: 100%;
   background-image:
@@ -36,7 +35,6 @@ body {
   background-position: center top;
 }
 
-/* ---------- nav ---------- */
 .nav {
   position: sticky;
   top: 0;
@@ -50,7 +48,6 @@ body {
   border-bottom: 1px solid var(--line);
 }
 
-/* ---------- logo ---------- */
 .logo {
   display: inline-flex;
   align-items: center;
@@ -78,23 +75,8 @@ body {
 
 .nav-right { display: flex; align-items: center; gap: 12px; }
 
-.pill-ghost { background: transparent; }
-
-.user-chip {
-  display: inline-flex; align-items: center; gap: 8px;
-  color: var(--text); font-size: 13px; font-weight: 600;
-  padding: 6px 12px 6px 6px; border: 1px solid var(--line);
-  border-radius: var(--pill);
-}
-.avatar {
-  display: grid; place-items: center;
-  width: 26px; height: 26px; border-radius: 50%;
-  background: var(--accent); color: #fff; font-weight: 800; font-size: 12px;
-}
-
 .dot { color: var(--accent); }
 
-/* ---------- pills / buttons ---------- */
 .pill {
   display: inline-flex;
   align-items: center;
@@ -119,7 +101,6 @@ body {
 
 .arrow { font-size: 13px; }
 
-/* ---------- hero ---------- */
 .hero { padding: 64px 28px 28px; max-width: 1180px; margin: 0 auto; }
 .hero h1 {
   margin: 0;
@@ -144,7 +125,6 @@ body {
   100% { box-shadow: 0 0 0 0 rgba(33, 208, 122, 0); }
 }
 
-/* ---------- controls ---------- */
 .controls { max-width: 1180px; margin: 0 auto; padding: 8px 28px 0; }
 
 .search {
@@ -185,7 +165,6 @@ body {
 .chip:hover { color: var(--text); border-color: #34343c; }
 .chip-active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-/* ---------- grid + cards ---------- */
 .grid-wrap { max-width: 1180px; margin: 0 auto; padding: 32px 28px 64px; }
 .grid {
   display: grid;
@@ -252,7 +231,6 @@ body {
 .ghost:hover { color: var(--text); border-color: #34343c; }
 .ghost.danger:hover { color: var(--danger); border-color: rgba(255, 84, 112, 0.5); }
 
-/* ---------- states ---------- */
 .banner {
   border: 1px solid var(--line);
   background: var(--bg-elev);
@@ -267,16 +245,38 @@ body {
 .empty h2 { color: var(--text); font-size: 28px; margin: 0 0 10px; }
 .empty p { margin: 0 0 24px; }
 
-/* ---------- footer ---------- */
 .footer {
   max-width: 1180px; margin: 0 auto;
-  padding: 28px; border-top: 1px solid var(--line);
-  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
-  font-weight: 700; letter-spacing: 1px; font-size: 13px;
+  padding: 32px 28px; border-top: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 22px;
+  font-size: 13px;
+}
+.footer-row {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 16px;
+}
+.footer-bottom {
+  padding-top: 18px; border-top: 1px solid var(--line-soft);
 }
 .muted { color: var(--muted); font-weight: 400; letter-spacing: 0; }
 
-/* ---------- modal ---------- */
+.socials { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.socials-label {
+  color: var(--muted); font-size: 12px; letter-spacing: 1px;
+  text-transform: uppercase; margin-right: 4px;
+}
+.social {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--pill);
+  color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 600;
+  transition: color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+.social svg { width: 16px; height: 16px; }
+.social:hover {
+  color: var(--text); border-color: var(--accent);
+  background: rgba(47, 107, 255, 0.08); transform: translateY(-2px);
+}
+
 .overlay {
   position: fixed; inset: 0; z-index: 50;
   background: rgba(0, 0, 0, 0.65);
@@ -318,44 +318,6 @@ body {
 
 .modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 22px; }
 
-/* ---------- auth screen ---------- */
-.auth-wrap {
-  min-height: 100vh;
-  display: grid; place-items: center;
-  padding: 24px;
-}
-.auth-card {
-  width: min(420px, 100%);
-  background: var(--bg-card);
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  padding: 34px 30px;
-}
-.auth-brand { display: flex; justify-content: center; margin-bottom: 22px; }
-.auth-title { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
-.auth-sub { margin: 8px 0 24px; color: var(--muted); font-size: 14px; }
-
-.auth-card form { display: flex; flex-direction: column; gap: 6px; }
-.auth-card label { font-size: 13px; color: var(--muted); margin-top: 12px; font-weight: 600; }
-.auth-card input {
-  background: #08080a; border: 1px solid var(--line);
-  border-radius: 10px; padding: 12px 14px;
-  color: var(--text); font-size: 15px; font-family: inherit; outline: none;
-}
-.auth-card input:focus { border-color: var(--accent); }
-
-.auth-submit { justify-content: center; margin-top: 22px; width: 100%; }
-.auth-switch { text-align: center; color: var(--muted); font-size: 14px; margin: 20px 0 0; }
-.link {
-  background: none; border: none; color: var(--accent);
-  font: inherit; font-weight: 600; cursor: pointer; padding: 0;
-}
-.link:hover { color: var(--accent-hover); text-decoration: underline; }
-
-/* ======================================================================
-   Motion — entrances on mount/screen change + tactile feedback on actions.
-   All wrapped in prefers-reduced-motion so it can be turned off by the OS.
-   ====================================================================== */
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
@@ -369,30 +331,16 @@ body {
   to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* screen-level fade when switching between auth and the app */
 .app { animation: fadeIn 0.45s ease both; }
-.auth-wrap { animation: fadeIn 0.4s ease both; }
-
-/* staggered hero/controls reveal */
 .hero { animation: fadeInUp 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .controls { animation: fadeInUp 0.55s 0.07s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-
-/* each card eases in (delay set inline, capped, per-card) */
 .card-enter { animation: fadeInUp 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-
-/* auth card pops in */
-.auth-card { animation: popIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-
-/* modal: overlay fades, panel pops */
 .overlay { animation: fadeIn 0.2s ease both; }
 .modal { animation: popIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 
-/* tactile press feedback on buttons */
 .pill:active:not(:disabled) { transform: translateY(0) scale(0.97); }
 .ghost:active, .chip:active, .star:active { transform: scale(0.92); }
 .star { transition: transform 0.15s ease, color 0.15s ease; }
-
-/* smoother copy-state + general control transitions already exist inline */
 
 @media (prefers-reduced-motion: reduce) {
   *,
