@@ -71,8 +71,24 @@ tagged `python`.
 
 ## 4. AI usage
 
-I used AI to help write the database schema (the `CREATE TABLE` definition and
-column choices for the snippets table) and refine ANSWERS.md
+**Database schema** — I used Claude. I asked it to draft a SQLite schema for storing snippets (title, language, code, tags, a pin flag, and
+timestamps). It gave me a `CREATE TABLE snippets` statement with sensible columns
+and types, and suggested two things I didn't keep:
+
+- It put tags in a separate `tags` table joined through a `snippet_tags` link
+  table (a fully normalized many-to-many). **I changed this to a single
+  comma-separated `tags TEXT` column** ([`backend/db.py`](backend/db.py)). For an
+  app this size, two extra tables and join queries are overhead — a normalized
+  string is trivial to read/write, and I do the splitting and de-duplication in
+  one small `normalize_tags` helper.
+- It used `created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`. **I switched the
+  timestamp columns to `TEXT` populated from Python** via a `now_iso()` helper
+  that returns timezone-aware ISO-8601 UTC. SQLite's `CURRENT_TIMESTAMP` writes a
+  naive local-time string with no zone, which is ambiguous across machines;
+  generating the value myself keeps every timestamp explicit and in UTC.
+
+I also used the assistant to proofread and tighten the wording in this
+ANSWERS.md.
 
 ---
 
