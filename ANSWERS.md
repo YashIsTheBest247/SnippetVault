@@ -42,12 +42,8 @@ if no stack was specified, so the only real decision was storage and shape.
   dev proxy lets the frontend and backend share one origin with no CORS fuss.
 
 **Worse choices:**
-- **PostgreSQL / a hosted DB** — you'd need a running database server (or network
-  + credentials) on a fresh machine just to view a list of snippets. That fails
-  the "run it on a fresh machine" spirit for what is local, self-hosted data.
-- **A flat JSON file** — tempting for simplicity, but concurrent writes can
-  corrupt it, and I'd have to hand-roll the search/filter that SQLite gives me
-  with a `WHERE` clause. SQLite is barely more code and far more robust.
+- **PostgreSQL / a hosted DB** — you'd need a running database server (or network + credentials) on a fresh machine just to view a list of snippets. That fails the "run it    on a fresh machine" spirit for what is local, self-hosted data.
+- **A flat JSON file** — tempting for simplicity, but concurrent writes can corrupt it, and I'd have to hand-roll the search/filter that SQLite gives me with a `WHERE` clause. SQLite is barely more code and far more robust.
 
 ---
 
