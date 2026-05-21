@@ -50,7 +50,31 @@ body {
   border-bottom: 1px solid var(--line);
 }
 
-.brand { display: flex; align-items: center; gap: 12px; }
+/* ---------- logo ---------- */
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  cursor: default;
+  transition: transform 0.2s ease;
+}
+.logo:hover { transform: translateY(-1px); }
+.logo-mark {
+  width: 34px;
+  height: 34px;
+  filter: drop-shadow(0 4px 12px rgba(47, 107, 255, 0.35));
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.logo:hover .logo-mark { transform: rotate(-6deg) scale(1.05); }
+.logo-word {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.2px;
+  color: var(--text);
+}
+.logo-word-2 { color: var(--muted); font-weight: 700; }
+.logo-lg .logo-mark { width: 46px; height: 46px; }
+.logo-lg .logo-word { font-size: 22px; }
 
 .nav-right { display: flex; align-items: center; gap: 12px; }
 
@@ -67,21 +91,6 @@ body {
   width: 26px; height: 26px; border-radius: 50%;
   background: var(--accent); color: #fff; font-weight: 800; font-size: 12px;
 }
-
-.monogram {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: #fff;
-  color: #000;
-  font-weight: 900;
-  font-size: 14px;
-  letter-spacing: 0.5px;
-}
-
-.brandname { font-weight: 800; letter-spacing: 2px; font-size: 18px; }
 
 .dot { color: var(--accent); }
 
@@ -322,8 +331,7 @@ body {
   border-radius: 22px;
   padding: 34px 30px;
 }
-.auth-brand { justify-content: center; margin-bottom: 22px; }
-.auth-brand .brandname { letter-spacing: 1.5px; }
+.auth-brand { display: flex; justify-content: center; margin-bottom: 22px; }
 .auth-title { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
 .auth-sub { margin: 8px 0 24px; color: var(--muted); font-size: 14px; }
 
@@ -343,3 +351,55 @@ body {
   font: inherit; font-weight: 600; cursor: pointer; padding: 0;
 }
 .link:hover { color: var(--accent-hover); text-decoration: underline; }
+
+/* ======================================================================
+   Motion — entrances on mount/screen change + tactile feedback on actions.
+   All wrapped in prefers-reduced-motion so it can be turned off by the OS.
+   ====================================================================== */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.96) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* screen-level fade when switching between auth and the app */
+.app { animation: fadeIn 0.45s ease both; }
+.auth-wrap { animation: fadeIn 0.4s ease both; }
+
+/* staggered hero/controls reveal */
+.hero { animation: fadeInUp 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.controls { animation: fadeInUp 0.55s 0.07s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* each card eases in (delay set inline, capped, per-card) */
+.card-enter { animation: fadeInUp 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* auth card pops in */
+.auth-card { animation: popIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* modal: overlay fades, panel pops */
+.overlay { animation: fadeIn 0.2s ease both; }
+.modal { animation: popIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* tactile press feedback on buttons */
+.pill:active:not(:disabled) { transform: translateY(0) scale(0.97); }
+.ghost:active, .chip:active, .star:active { transform: scale(0.92); }
+.star { transition: transform 0.15s ease, color 0.15s ease; }
+
+/* smoother copy-state + general control transitions already exist inline */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

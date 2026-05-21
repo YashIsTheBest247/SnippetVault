@@ -187,10 +187,11 @@ export default function App() {
           <EmptyState filtered={Boolean(query || activeTag)} onNew={openNew} />
         )}
         <div className="grid">
-          {snippets.map((s) => (
+          {snippets.map((s, i) => (
             <SnippetCard
               key={s.id}
               s={s}
+              index={i}
               onEdit={() => openEdit(s)}
               onDelete={() => handleDelete(s)}
               onPin={() => handlePin(s)}
@@ -214,6 +215,36 @@ export default function App() {
           onSave={handleSave}
         />
       )}
+    </div>
+  );
+}
+
+function Logo({ size = "md" }) {
+  return (
+    <div className={`logo logo-${size}`}>
+      <svg className="logo-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+        <rect x="2" y="2" width="36" height="36" rx="11" fill="url(#lgFill)" />
+        <rect
+          x="2.6" y="2.6" width="34.8" height="34.8" rx="10.4"
+          stroke="rgba(255,255,255,0.18)" strokeWidth="1.2"
+        />
+        {/* code brackets — the "snippet" mark */}
+        <path d="M16 13 L10 20 L16 27" stroke="#fff" strokeWidth="2.4"
+          strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M24 13 L30 20 L24 27" stroke="#fff" strokeWidth="2.4"
+          strokeLinecap="round" strokeLinejoin="round" />
+        <line x1="22.4" y1="12" x2="17.6" y2="28" stroke="rgba(255,255,255,0.85)"
+          strokeWidth="2.4" strokeLinecap="round" />
+        <defs>
+          <linearGradient id="lgFill" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#4d83ff" />
+            <stop offset="1" stopColor="#1746b8" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <span className="logo-word">
+        Snippet<span className="logo-word-2"> Vault</span><span className="dot">.</span>
+      </span>
     </div>
   );
 }
@@ -247,9 +278,8 @@ function AuthScreen({ onAuthed }) {
   return (
     <div className="auth-wrap">
       <div className="auth-card">
-        <div className="brand auth-brand">
-          <span className="monogram">SV</span>
-          <span className="brandname">SNIPPET VAULT<span className="dot">.</span></span>
+        <div className="auth-brand">
+          <Logo size="lg" />
         </div>
         <h1 className="auth-title">{isRegister ? "Create your vault" : "Welcome back"}</h1>
         <p className="auth-sub">
@@ -304,10 +334,7 @@ function AuthScreen({ onAuthed }) {
 function NavBar({ onNew, user, onLogout }) {
   return (
     <nav className="nav">
-      <div className="brand">
-        <span className="monogram">SV</span>
-        <span className="brandname">SNIPPET <span className="dot">.</span></span>
-      </div>
+      <Logo />
       <div className="nav-right">
         <button className="pill pill-primary" onClick={onNew}>
           + NEW SNIPPET <span className="arrow">↗</span>
@@ -322,8 +349,10 @@ function NavBar({ onNew, user, onLogout }) {
   );
 }
 
-function SnippetCard({ s, onEdit, onDelete, onPin }) {
+function SnippetCard({ s, index = 0, onEdit, onDelete, onPin }) {
   const [copied, setCopied] = useState(false);
+  // Stagger the entrance, but cap the delay so a big list doesn't crawl in.
+  const enterDelay = `${Math.min(index, 12) * 45}ms`;
 
   async function copy() {
     try {
@@ -336,7 +365,10 @@ function SnippetCard({ s, onEdit, onDelete, onPin }) {
   }
 
   return (
-    <article className={`card ${s.pinned ? "card-pinned" : ""}`}>
+    <article
+      className={`card card-enter ${s.pinned ? "card-pinned" : ""}`}
+      style={{ animationDelay: enterDelay }}
+    >
       <div className="card-head">
         <h3 title={s.title}>{s.title}</h3>
         <button
