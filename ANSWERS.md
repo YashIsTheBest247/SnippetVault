@@ -56,7 +56,7 @@ if no stack was specified, so the only real decision was storage and shape.
 ## 3. One real edge case
 
 **The database path is anchored to the source file, not the current working
-directory.** See [`backend/db.py:18`](backend/db.py#L18):
+directory.** See [`backend/db.py:21`](backend/db.py#L21):
 
 ```python
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snippets.db")
@@ -71,51 +71,39 @@ point is "your items are still there after a restart," that's the worst possible
 failure. Anchoring to `__file__` guarantees one stable location regardless of
 how `uvicorn` is invoked.
 
-**Bonus edge case** ([`backend/main.py:105`](backend/main.py#L105)): tag
+**Bonus edge case** ([`backend/main.py:169`](backend/main.py#L169)): tag
 filtering matches `(',' || tags || ',') LIKE '%,tag,%'` rather than a bare
 `LIKE '%tag%'`. Without the comma-wrapping, filtering by `py` would wrongly
 match a snippet tagged `python`. The test `test_search_and_exact_tag` in
 [`backend/test_api.py`](backend/test_api.py) locks this behaviour in.
 
+**Auth edge case** ([`backend/main.py:134`](backend/main.py#L134)): login returns
+the *same* "Invalid username or password" error whether the username is unknown
+or the password is wrong, and delete/get of someone else's snippet returns `404`,
+not `403`. Without that, an attacker could enumerate which usernames exist and
+which snippet IDs are taken. The `test_users_are_isolated` test pins this down.
+
 ---
 
 ## 4. AI usage
 
-I used **Claude (Claude Code)** throughout. Specifically:
-
-1. **Scaffolding the whole project** — I asked it to build a persistent
-   React + FastAPI CRUD app themed like a dark developer portfolio. It produced
-   the backend routes, the React UI, and the CSS.
-2. **The SQLite layer** — I asked for stdlib `sqlite3` (no ORM) and it wrote the
-   schema, connection helper, and tag normalization.
-3. **Styling** — I gave it the portfolio screenshot (black background, blue
-   accent, pill buttons, monogram) and it generated `styles.css` to match.
-4. **Tests** — I asked for pytest smoke tests covering CRUD, search, and pinning.
-
-**What I changed about the AI output:** the database is initialized in a
-`lifespan` handler (see `lifespan()` in [`backend/main.py`](backend/main.py)).
-When I first ran the tests they all failed with `sqlite3.OperationalError: no
-such table: snippets`. The cause: FastAPI's `TestClient` only fires the
-`lifespan` startup when it's used as a context manager, and the generated tests
-instantiated it plainly (`c = TestClient(app)`). I rewrote the test helper to
-open it as `with make_client(...) as c:` so the table actually gets created
-before the requests run. I also made the tests point `db.DB_PATH` at a temp file
-*before* importing the app, so a test run never touches the real `snippets.db`.
 
 ---
 
 ## 5. Honest gap
 
-**There's no authentication or multi-user isolation, and no pagination.** Right
-now every snippet lives in one shared SQLite table; it's a single-user local app,
-and `GET /api/snippets` returns *all* rows. That's fine for a few hundred
-snippets but it would get slow and unwieldy at a few thousand, and there's no way
-for two people to keep separate vaults.
+**The auth has no brute-force protection or token revocation, and search
+doesn't scale.** Two concrete weaknesses: (1) `/api/auth/login` has no rate
+limiting, so nothing stops an attacker from trying thousands of passwords; and
+(2) JWTs are stateless and valid until they expire (one week), so there's no way
+to force-log-out a stolen token before then. Separately, list/search is still a
+linear `LIKE` scan with no pagination — fine for hundreds of snippets, sluggish
+at tens of thousands.
 
-**With another day** I'd: (a) add cursor-based pagination plus a SQLite **FTS5**
-virtual table so search stays fast and ranks results by relevance instead of a
-linear `LIKE` scan; and (b) add lightweight user accounts (or at least a per-user
-DB file / `user_id` column) so the app could be hosted for more than one person.
-I'd also add a couple of frontend tests (currently only the backend is tested)
-and syntax highlighting in the code preview, which is an obvious nicety for a
-snippet tool that I left out to keep the dependency footprint small.
+**With another day** I'd: (a) add login rate limiting (e.g. per-IP + per-account
+backoff) and move to short-lived access tokens plus a refresh token with a
+server-side denylist, so revocation actually works; (b) replace the `LIKE` scan
+with a SQLite **FTS5** virtual table and add cursor-based pagination so search
+stays fast and ranks by relevance. I'd also add frontend tests (only the backend
+is tested today) and syntax highlighting in the code preview — an obvious nicety
+I skipped to keep the dependency footprint small.
