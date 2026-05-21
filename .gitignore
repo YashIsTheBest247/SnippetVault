@@ -6,6 +6,8 @@ __pycache__/
 # SQLite database (created at runtime — data is local, not committed)
 backend/snippets.db
 backend/snippets.db-journal
+backend/snippets.db-wal
+backend/snippets.db-shm
 
 # Node / frontend
 frontend/node_modules/
